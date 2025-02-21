@@ -48,15 +48,15 @@ pub const Chunk = struct {
         return @intCast(self.constants.items.len - 1);
     }
 
-    pub fn deinit(self: *Self) !void {
-        try self.code.deinit();
-        try self.lines.deinit();
-        try self.constants.deinit();
+    pub fn deinit(self: *Self) void {
+        self.code.deinit();
+        self.lines.deinit();
+        self.constants.deinit();
     }
 
     pub fn get_line(self: *const Self, offset: usize) usize {
         var line: usize = 0;
-        var sum = 0;
+        var sum: usize = 0;
 
         while (sum <= offset) {
             sum += self.lines.items[line];
@@ -66,34 +66,70 @@ pub const Chunk = struct {
         return line;
     }
 
+    pub fn iter(self: *const Self) InstructionIterator {
+        return .{
+            .chunk = self,
+            .offset = 0,
+            .line = 0,
+        };
+    }
+
     pub fn dissamsemble(self: *const Self, name: ?[]const u8) void {
-        std.debug.print("== {s} ==\n", .{name orelse ""});
+        std.debug.print("=== {s} ===", .{name});
+        var iterator = self.iter();
 
-        var line: usize = 0;
-        var sum: usize = 0;
-        var offset: usize = 0;
-        while (offset < self.code.items.len) {
-            const int_code = self.code.items[offset];
-            const instruction: OpCode = @enumFromInt(int_code);
-
-            while (offset >= sum) {
-                sum += self.lines.items[line];
-                line += 1;
-            }
-
-            std.debug.print("{d:0>4} {d: >5} {s: <20}", .{ offset, line, OpCode.get_name(int_code) });
-            offset += 1;
-
-            switch (instruction) {
-                .op_constant => {
-                    const idx = self.code.items[offset];
-                    offset += 1;
-                    value.Value.print_value(self.constants.items[idx]);
-                },
-                else => {},
-            }
-
-            std.debug.print("\n", .{});
+        while (iterator.next()) |_| {
+            self.dissamsembleInstruction(iterator.get_offset());
         }
+    }
+
+    pub fn dissamsembleInstruction(self: *const Self, offset: usize) void {
+        const int_code = self.code.items[offset];
+        const instruction: OpCode = @enumFromInt(int_code);
+
+        std.debug.print("{d:0>4} {d: >5} {s: <20}", .{ offset, self.get_line(offset), OpCode.get_name(int_code) });
+
+        switch (instruction) {
+            .op_constant => {
+                const idx = self.code.items[offset + 1];
+                self.constants.items[idx].print();
+            },
+            else => {},
+        }
+
+        std.debug.print("\n", .{});
+    }
+};
+
+pub const InstructionIterator = struct {
+    const Self = @This();
+    chunk: *Chunk,
+    offset: usize,
+
+    pub fn has_next(self: *const Self) bool {
+        return self.offset < self.chunk.code.items.len;
+    }
+
+    pub fn get_offset(self: *const Self) usize {
+        return self.offset;
+    }
+
+    pub fn next(self: *Self) ?OpCode {
+        if (!self.offset < self.chunk.code.items.len) {
+            return null;
+        }
+
+        const instruction: OpCode = @enumFromInt(self.chunk.code.items[self.offset]);
+
+        switch (instruction) {
+            .op_constant => {
+                self.offset += 2;
+            },
+            else => {
+                self.offset += 1;
+            },
+        }
+
+        return instruction;
     }
 };

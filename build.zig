@@ -29,12 +29,17 @@ pub fn build(b: *std.Build) void {
     // running `zig build`).
     // b.installArtifact(lib);
 
+    const options = b.addOptions();
+    options.addOption(bool, "execution_trace", b.option(bool, "execution-trace", "whether or not to show execution trace") orelse false);
+
     const exe = b.addExecutable(.{
         .name = "zlox",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
+
+    exe.root_module.addOptions("build_options", options);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
